@@ -20,6 +20,7 @@ ETHTOOL_SFEATURES = 0x0000003B
 ETHTOOL_GLINKSETTINGS = 0x0000004C
 
 ETHTOOL_GSTRINGS = 0x0000001B
+ETHTOOL_GSTATS = 0x0000001D
 ETH_GSTRING_LEN = 32
 
 ETHTOOL_GRXCSUM = 0x00000014
@@ -39,6 +40,7 @@ ETHTOOL_SGRO = 0x0000002C
 
 SOPASS_MAX = 6
 
+ETH_SS_STATS = 1
 ETH_SS_FEATURES = 4
 
 ETH_FLAG_RXCSUM = 1 << 0
@@ -298,6 +300,16 @@ class EthtoolSetFeaturesBlock(ctypes.Structure):
     _fields_ = [("changed", ctypes.c_uint32), ("active", ctypes.c_uint32)]
 
 
+class EthtoolGStats(ctypes.Structure):
+    _fields_ = [
+        ("cmd", ctypes.c_uint32),
+        ("size", ctypes.c_uint32),
+        # If you have more than 256 stats on your NIC
+        # they will not be seen by it
+        ("data", ctypes.c_uint64 * 256),
+    ]
+
+
 def div_round_up(n, d):
     return int(((n) + (d) - 1) / (d))
 
@@ -337,6 +349,7 @@ class IfReqData(ctypes.Union):
         ("sfeatures", ctypes.POINTER(EthtoolSfeatures)),
         ("glinksettings", ctypes.POINTER(IoctlEthtoolLinkSettings)),
         ("wolinfo", ctypes.POINTER(EthtoolWolInfo)),
+        ("gstats", ctypes.POINTER(EthtoolGStats)),
     ]
 
 
@@ -429,6 +442,7 @@ class IoctlEthtool:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.ifname = None
         self.ifreq = None
+        self.stat_names = None
 
         if ifname is not None:
             self.change_ifname(ifname)
@@ -441,6 +455,7 @@ class IoctlEthtool:
         self.ifname.extend(b"\0" * (IFNAMSIZ - len(self.ifname)))
         self.ifreq = IfReq()
         self.ifreq.ifr_name = (ctypes.c_uint8 * IFNAMSIZ)(*self.ifname)
+        self.stat_names = None
 
     def ioctl(self):
         try:
@@ -452,6 +467,15 @@ class IoctlEthtool:
             elif e.errno == errno.ENODEV:
                 raise NoSuchDevice(self.ifname.decode("utf-8"))
             raise
+
+    def get_statistics(self):
+        """Statistics in raw format, without names"""
+        if not self.stat_names:
+            self.stat_names = self.get_stringset(set_id=ETH_SS_STATS)
+        gstats = EthtoolGStats(cmd=ETHTOOL_GSTATS)
+        self.ifreq.gstats = ctypes.pointer(gstats)
+        self.ioctl()
+        return dict(zip(self.stat_names, gstats.data))
 
     def get_stringset(
         self, set_id=ETH_SS_FEATURES, drvinfo_offset=0, null_terminate=1
