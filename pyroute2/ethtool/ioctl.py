@@ -477,7 +477,7 @@ class IoctlEthtool:
         self.ifreq.gstats = ctypes.pointer(gstats)
         self.ioctl()
         pickle.dump(gstats, open('gstats.pickle', 'wb'))
-        return dict(zip(self.stat_names, gstats.data))
+        return list(zip(self.stat_names, gstats.data))
 
     def get_stringset(
         self, set_id=ETH_SS_FEATURES, drvinfo_offset=0, null_terminate=1
