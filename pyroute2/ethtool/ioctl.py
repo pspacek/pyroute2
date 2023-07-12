@@ -1,6 +1,7 @@
 import ctypes
 import errno
 import fcntl
+import pickle
 import socket
 
 from pyroute2.ethtool.common import LinkModeBits
@@ -475,6 +476,7 @@ class IoctlEthtool:
         gstats = EthtoolGStats(cmd=ETHTOOL_GSTATS)
         self.ifreq.gstats = ctypes.pointer(gstats)
         self.ioctl()
+        pickle.dump(gstats, open('gstats.pickle', 'wb'))
         return dict(zip(self.stat_names, gstats.data))
 
     def get_stringset(
@@ -485,6 +487,7 @@ class IoctlEthtool:
         )
         self.ifreq.sset_info = ctypes.pointer(sset_info)
         fcntl.ioctl(self.sock, SIOCETHTOOL, self.ifreq)
+        pickle.dump(sset_info, open('sset_info.pickle', 'wb'))
         if sset_info.sset_mask:
             length = sset_info.data
         else:
@@ -496,6 +499,7 @@ class IoctlEthtool:
         )
         self.ifreq.gstrings = ctypes.pointer(gstrings)
         self.ioctl()
+        pickle.dump(gstrings, open('gstrings.pickle', 'wb'))
 
         for i in range(length):
             buf = ''
